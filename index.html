@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Distance Checker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Distance Checker</h1>
+
+  <!-- File Upload Row -->
+  <div class="row">
+    <input type="file" id="fileInput" />
+    <span id="fileName">No file selected</span>
+    <button class="help-button" onclick="showHelp('file')">?</button>
+  </div>
+
+  <!-- Distance and Coordinates Row -->
+  <div class="row">
+    <input type="text" id="distanceField" placeholder="Distance (miles)" />
+    <input type="text" id="coordinatesField" placeholder="Coordinates (lat, lon)" />
+    <button class="help-button" onclick="showHelp('coordinates')">?</button>
+  </div>
+
+  <!-- Run and Save Row -->
+  <div class="row">
+    <button id="runButton">Run</button>
+    <button id="saveButton">Save</button>
+  </div>
+
+  <!-- Result Box -->
+  <div class="row">
+    <textarea id="resultBox" placeholder="Results will appear here..." rows="10" cols="60"></textarea>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
