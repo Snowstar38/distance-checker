@@ -13,6 +13,7 @@ async function loadCoordinates() {
     const response = await fetch('coordinates.json');
     coordinatesDB = await response.json();
     console.log('Coordinates database loaded successfully');
+    console.log('Number of coordinates loaded:', Object.keys(coordinatesDB).length);
   } catch (error) {
     console.error('Error loading coordinates:', error);
     resultBox.value = 'Error: Could not load coordinates database';
@@ -147,8 +148,11 @@ function matchLocations(uniqueLocations) {
 
 function processCSV(csvContent) {
   try {
+    console.log('Starting CSV processing...');
+    
     // Parse CSV
     csvData = parseCSV(csvContent);
+    console.log('Parsed CSV data:', csvData.length, 'rows');
     
     if (csvData.length === 0) {
       resultBox.value = 'Error: No data found in CSV file';
@@ -157,7 +161,10 @@ function processCSV(csvContent) {
     
     // Get headers and find location columns
     const headers = Object.keys(csvData[0]);
+    console.log('CSV Headers:', headers);
+    
     const locationInfo = findLocationColumns(headers);
+    console.log('Location columns found:', locationInfo);
     
     // Check if we have location columns
     if (!locationInfo.hasCity && !locationInfo.hasState && !locationInfo.hasAddress) {
@@ -175,6 +182,15 @@ function processCSV(csvContent) {
     });
     
     const uniqueLocations = Array.from(locationSet);
+    console.log('Unique locations found:', uniqueLocations.length);
+    console.log('Sample locations:', uniqueLocations.slice(0, 5));
+    
+    // Check if coordinates are loaded
+    if (Object.keys(coordinatesDB).length === 0) {
+      console.error('Coordinates database is empty!');
+      resultBox.value = 'Error: Coordinates database not loaded. Check if coordinates.json exists.';
+      return;
+    }
     
     // Match locations with coordinates database
     const matchResults = matchLocations(uniqueLocations);
