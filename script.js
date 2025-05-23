@@ -3,25 +3,20 @@ const fileInput = document.getElementById('fileInput');
 const fileName = document.getElementById('fileName');
 const resultBox = document.getElementById('resultBox');
 
-// Store parsed CSV data and coordinates globally
-let csvData = [];
-let coordinatesDB = {};
+// Global variable to store coordinates database
+let coordinatesDB = null;
 
-// Load coordinates from JSON file
-async function loadCoordinates() {
+// Load coordinates database on page load
+window.addEventListener('DOMContentLoaded', async () => {
   try {
     const response = await fetch('coordinates.json');
     coordinatesDB = await response.json();
     console.log('Coordinates database loaded successfully');
-    console.log('Number of coordinates loaded:', Object.keys(coordinatesDB).length);
   } catch (error) {
-    console.error('Error loading coordinates:', error);
+    console.error('Failed to load coordinates database:', error);
     resultBox.value = 'Error: Could not load coordinates database';
   }
-}
-
-// Load coordinates when page loads
-loadCoordinates();
+});
 
 // Add event listener for file selection
 fileInput.addEventListener('change', handleFileSelect);
@@ -60,159 +55,125 @@ function handleFileSelect(event) {
   reader.readAsText(file);
 }
 
-function parseCSV(csvContent) {
-  const lines = csvContent.split(/\r?\n/);
-  const result = [];
-  
-  // Filter out empty lines
-  const nonEmptyLines = lines.filter(line => line.trim() !== '');
-  
-  if (nonEmptyLines.length === 0) return result;
-  
-  // Simple CSV parsing - split by comma (doesn't handle quoted commas)
-  const headers = nonEmptyLines[0].split(',').map(h => h.trim());
-  
-  for (let i = 1; i < nonEmptyLines.length; i++) {
-    const values = nonEmptyLines[i].split(',').map(v => v.trim());
-    const row = {};
-    
-    headers.forEach((header, index) => {
-      row[header] = values[index] || '';
-    });
-    
-    result.push(row);
-  }
-  
-  return result;
-}
-
-function findLocationColumns(headers) {
-  // Convert headers to lowercase for case-insensitive matching
-  const lowerHeaders = headers.map(h => h.toLowerCase());
-  
-  const cityIndex = lowerHeaders.indexOf('city');
-  const stateIndex = lowerHeaders.indexOf('state');
-  const addressIndex = lowerHeaders.indexOf('address');
-  
-  return {
-    hasCity: cityIndex !== -1,
-    hasState: stateIndex !== -1,
-    hasAddress: addressIndex !== -1,
-    cityColumn: cityIndex !== -1 ? headers[cityIndex] : null,
-    stateColumn: stateIndex !== -1 ? headers[stateIndex] : null,
-    addressColumn: addressIndex !== -1 ? headers[addressIndex] : null
-  };
-}
-
-function extractLocation(row, locationInfo) {
-  // If we have both city and state columns, use them
-  if (locationInfo.hasCity && locationInfo.hasState) {
-    const city = row[locationInfo.cityColumn] || '';
-    const state = row[locationInfo.stateColumn] || '';
-    if (city && state) {
-      return `${city}, ${state}`;
-    }
-  }
-  
-  // Otherwise, use address column if available
-  if (locationInfo.hasAddress) {
-    return row[locationInfo.addressColumn] || '';
-  }
-  
-  return '';
-}
-
-function matchLocations(uniqueLocations) {
-  const results = {
-    matched: [],
-    unmatched: []
-  };
-  
-  // Convert coordinate database keys to lowercase for matching
-  const lowerCaseDB = {};
-  for (const key in coordinatesDB) {
-    lowerCaseDB[key.toLowerCase()] = coordinatesDB[key];
-  }
-  
-  uniqueLocations.forEach(location => {
-    const lowerLocation = location.toLowerCase();
-    if (lowerCaseDB[lowerLocation]) {
-      results.matched.push(location);
-    } else {
-      results.unmatched.push(location);
-    }
-  });
-  
-  return results;
-}
-
 function processCSV(csvContent) {
   try {
-    console.log('Starting CSV processing...');
-    
-    // Parse CSV
-    csvData = parseCSV(csvContent);
-    console.log('Parsed CSV data:', csvData.length, 'rows');
-    
-    if (csvData.length === 0) {
-      resultBox.value = 'Error: No data found in CSV file';
+    // Check if coordinates database is loaded
+    if (!coordinatesDB) {
+      resultBox.value = 'Error: Coordinates database not loaded yet. Please try again.';
       return;
     }
     
-    // Get headers and find location columns
-    const headers = Object.keys(csvData[0]);
-    console.log('CSV Headers:', headers);
+    // Split the content into lines
+    const lines = csvContent.split(/\r?\n/);
     
-    const locationInfo = findLocationColumns(headers);
-    console.log('Location columns found:', locationInfo);
+    // Filter out empty lines
+    const nonEmptyLines = lines.filter(line => line.trim() !== '');
     
-    // Check if we have location columns
-    if (!locationInfo.hasCity && !locationInfo.hasState && !locationInfo.hasAddress) {
-      resultBox.value = 'Error: No location columns found (city, state, or address)';
+    if (nonEmptyLines.length === 0) {
+      resultBox.value = 'Error: CSV file is empty';
       return;
     }
     
-    // Extract unique locations
-    const locationSet = new Set();
-    csvData.forEach(row => {
-      const location = extractLocation(row, locationInfo);
-      if (location) {
-        locationSet.add(location);
+    // Parse header row
+    const headers = parseCSVLine(nonEmptyLines[0]);
+    const headerLower = headers.map(h => h.toLowerCase().trim());
+    
+    // Find column indices
+    const cityIndex = headerLower.indexOf('city');
+    const stateIndex = headerLower.indexOf('state');
+    const addressIndex = headerLower.indexOf('address');
+    
+    // Check if we have the required columns
+    if (cityIndex === -1 && stateIndex === -1 && addressIndex === -1) {
+      resultBox.value = 'Error: CSV must have either "city"/"state" columns or an "address" column';
+      return;
+    }
+    
+    // Extract unique locations from data rows
+    const uniqueLocations = new Set();
+    
+    for (let i = 1; i < nonEmptyLines.length; i++) {
+      const row = parseCSVLine(nonEmptyLines[i]);
+      
+      let location = '';
+      
+      // Prefer city/state over address
+      if (cityIndex !== -1 && stateIndex !== -1) {
+        const city = row[cityIndex] ? row[cityIndex].trim() : '';
+        const state = row[stateIndex] ? row[stateIndex].trim() : '';
+        if (city && state) {
+          location = `${city}, ${state}`;
+        }
+      } else if (addressIndex !== -1) {
+        location = row[addressIndex] ? row[addressIndex].trim() : '';
       }
-    });
-    
-    const uniqueLocations = Array.from(locationSet);
-    console.log('Unique locations found:', uniqueLocations.length);
-    console.log('Sample locations:', uniqueLocations.slice(0, 5));
-    
-    // Check if coordinates are loaded
-    if (Object.keys(coordinatesDB).length === 0) {
-      console.error('Coordinates database is empty!');
-      resultBox.value = 'Error: Coordinates database not loaded. Check if coordinates.json exists.';
-      return;
+      
+      if (location) {
+        uniqueLocations.add(location);
+      }
     }
     
     // Match locations with coordinates database
-    const matchResults = matchLocations(uniqueLocations);
+    const matchedLocations = [];
+    const unmatchedLocations = [];
     
-    // Display results
-    let output = `File loaded successfully!\n`;
-    output += `Number of candidates: ${csvData.length}\n`;
-    output += `Number of unique locations: ${uniqueLocations.length}\n`;
-    output += `Locations matched: ${matchResults.matched.length}\n`;
-    output += `Locations not matched: ${matchResults.unmatched.length}\n`;
+    uniqueLocations.forEach(location => {
+      // Case-insensitive matching
+      const matched = Object.keys(coordinatesDB).find(key => 
+        key.toLowerCase() === location.toLowerCase()
+      );
+      
+      if (matched) {
+        matchedLocations.push(location);
+      } else {
+        unmatchedLocations.push(location);
+      }
+    });
     
-    if (matchResults.unmatched.length > 0) {
-      output += `\nUnmatched locations:\n`;
-      matchResults.unmatched.forEach(loc => {
-        output += `- ${loc}\n`;
+    // Calculate the number of data rows (excluding header)
+    const candidateCount = Math.max(0, nonEmptyLines.length - 1);
+    
+    // Display the results
+    let resultText = `File loaded successfully!\n`;
+    resultText += `Number of candidates: ${candidateCount}\n`;
+    resultText += `Unique locations found: ${uniqueLocations.size}\n`;
+    resultText += `Locations matched: ${matchedLocations.length}\n`;
+    resultText += `Locations not matched: ${unmatchedLocations.length}\n`;
+    
+    if (unmatchedLocations.length > 0) {
+      resultText += `\nUnmatched locations:\n`;
+      unmatchedLocations.forEach(loc => {
+        resultText += `- ${loc}\n`;
       });
     }
     
-    resultBox.value = output;
+    resultBox.value = resultText;
     
   } catch (error) {
     resultBox.value = 'Error: Could not process the CSV file';
     console.error('CSV processing error:', error);
   }
+}
+
+// Simple CSV line parser (handles basic cases)
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current);
+  return result;
 }
