@@ -185,6 +185,8 @@ function processCSV(csvContent) {
 }
 
 function handleRunButton() {
+  console.log('Run button clicked!'); // Debug
+  
   // Check if we have processed CSV data
   if (!processedCSVData) {
     resultBox.value = 'Error: Please upload a CSV file first';
@@ -281,6 +283,8 @@ function handleRunButton() {
 }
 
 function handleSaveButton() {
+  console.log('Save button clicked!'); // Debug
+  
   if (!filteredResults || filteredResults.length === 0) {
     resultBox.value = 'Error: No filtered results to save. Please run the analysis first.';
     return;
@@ -352,6 +356,7 @@ function parseCSVLine(line) {
 
 // Help function placeholders (you can implement these later)
 function showHelp(type) {
+  console.log('Help button clicked for:', type); // Debug
   if (type === 'file') {
     alert('Upload a CSV file with candidate data. The file should have either "city" and "state" columns, or a single "address" column.');
   } else if (type === 'coordinates') {
