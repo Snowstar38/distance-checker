@@ -14,7 +14,14 @@
       display: flex;
       align-items: center;
       margin: 15px 0;
+      gap: 15px;
+    }
+
+    .row-content {
+      display: flex;
+      align-items: center;
       gap: 10px;
+      width: 500px; /* Fixed width to ensure consistent alignment */
     }
 
     input, button, textarea {
@@ -226,15 +233,19 @@
 
   <!-- File Upload Row -->
   <div class="row">
-    <input type="file" id="fileInput" />
-    <span id="fileName">No file selected</span>
+    <div class="row-content">
+      <input type="file" id="fileInput" />
+      <span id="fileName">No file selected</span>
+    </div>
     <button class="help-button" onclick="showHelp('file')">?</button>
   </div>
 
   <!-- Distance and Coordinates Row -->
   <div class="row">
-    <input type="text" id="distanceField" placeholder="Distance (miles)" />
-    <input type="text" id="coordinatesField" placeholder="Coordinates (lat, lon)" />
+    <div class="row-content">
+      <input type="text" id="distanceField" placeholder="Distance (miles)" />
+      <input type="text" id="coordinatesField" placeholder="Coordinates (lat, lon)" />
+    </div>
     <button class="help-button" onclick="showHelp('coordinates')">?</button>
   </div>
 
