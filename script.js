@@ -2,9 +2,15 @@
 const fileInput = document.getElementById('fileInput');
 const fileName = document.getElementById('fileName');
 const resultBox = document.getElementById('resultBox');
+const distanceField = document.getElementById('distanceField');
+const coordinatesField = document.getElementById('coordinatesField');
+const runButton = document.getElementById('runButton');
+const saveButton = document.getElementById('saveButton');
 
-// Global variable to store coordinates database
+// Global variables to store data
 let coordinatesDB = null;
+let processedCSVData = null;
+let filteredResults = null;
 
 // Load coordinates database on page load
 window.addEventListener('DOMContentLoaded', async () => {
@@ -18,8 +24,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// Add event listener for file selection
+// Add event listeners
 fileInput.addEventListener('change', handleFileSelect);
+runButton.addEventListener('click', handleRunButton);
+saveButton.addEventListener('click', handleSaveButton);
 
 function handleFileSelect(event) {
   const file = event.target.files[0];
@@ -28,6 +36,7 @@ function handleFileSelect(event) {
   if (!file) {
     fileName.textContent = 'No file selected';
     resultBox.value = '';
+    processedCSVData = null;
     return;
   }
   
@@ -35,6 +44,7 @@ function handleFileSelect(event) {
   if (!file.name.toLowerCase().endsWith('.csv')) {
     fileName.textContent = 'Please select a CSV file';
     resultBox.value = 'Error: Please select a .csv file';
+    processedCSVData = null;
     return;
   }
   
@@ -50,6 +60,7 @@ function handleFileSelect(event) {
   
   reader.onerror = function() {
     resultBox.value = 'Error: Could not read the file';
+    processedCSVData = null;
   };
   
   reader.readAsText(file);
@@ -89,7 +100,8 @@ function processCSV(csvContent) {
       return;
     }
     
-    // Extract unique locations from data rows
+    // Parse all data rows
+    const candidates = [];
     const uniqueLocations = new Set();
     
     for (let i = 1; i < nonEmptyLines.length; i++) {
@@ -107,6 +119,16 @@ function processCSV(csvContent) {
       } else if (addressIndex !== -1) {
         location = row[addressIndex] ? row[addressIndex].trim() : '';
       }
+      
+      // Store candidate data
+      const candidate = {
+        originalRow: row,
+        location: location,
+        coordinates: null,
+        distance: null
+      };
+      
+      candidates.push(candidate);
       
       if (location) {
         uniqueLocations.add(location);
@@ -130,12 +152,18 @@ function processCSV(csvContent) {
       }
     });
     
-    // Calculate the number of data rows (excluding header)
-    const candidateCount = Math.max(0, nonEmptyLines.length - 1);
+    // Store processed data for later use
+    processedCSVData = {
+      headers: headers,
+      candidates: candidates,
+      uniqueLocations: uniqueLocations,
+      matchedLocations: matchedLocations,
+      unmatchedLocations: unmatchedLocations
+    };
     
     // Display the results
     let resultText = `File loaded successfully!\n`;
-    resultText += `Number of candidates: ${candidateCount}\n`;
+    resultText += `Number of candidates: ${candidates.length}\n`;
     resultText += `Unique locations found: ${uniqueLocations.size}\n`;
     resultText += `Locations matched: ${matchedLocations.length}\n`;
     resultText += `Locations not matched: ${unmatchedLocations.length}\n`;
@@ -152,7 +180,151 @@ function processCSV(csvContent) {
   } catch (error) {
     resultBox.value = 'Error: Could not process the CSV file';
     console.error('CSV processing error:', error);
+    processedCSVData = null;
   }
+}
+
+function handleRunButton() {
+  // Check if we have processed CSV data
+  if (!processedCSVData) {
+    resultBox.value = 'Error: Please upload a CSV file first';
+    return;
+  }
+  
+  // Get target coordinates
+  const coordsText = coordinatesField.value.trim();
+  if (!coordsText) {
+    resultBox.value = 'Error: Please enter target coordinates (lat, lon)';
+    return;
+  }
+  
+  // Parse coordinates
+  const coordsParts = coordsText.split(',').map(s => s.trim());
+  if (coordsParts.length !== 2) {
+    resultBox.value = 'Error: Coordinates must be in format "lat, lon"';
+    return;
+  }
+  
+  const targetLat = parseFloat(coordsParts[0]);
+  const targetLon = parseFloat(coordsParts[1]);
+  
+  if (isNaN(targetLat) || isNaN(targetLon)) {
+    resultBox.value = 'Error: Coordinates must be valid numbers';
+    return;
+  }
+  
+  // Get maximum distance
+  const maxDistanceText = distanceField.value.trim();
+  if (!maxDistanceText) {
+    resultBox.value = 'Error: Please enter maximum distance in miles';
+    return;
+  }
+  
+  const maxDistance = parseFloat(maxDistanceText);
+  if (isNaN(maxDistance) || maxDistance <= 0) {
+    resultBox.value = 'Error: Distance must be a positive number';
+    return;
+  }
+  
+  // Calculate distances for all candidates
+  const candidatesWithDistance = [];
+  let matchedCandidates = 0;
+  let withinRadius = 0;
+  
+  processedCSVData.candidates.forEach(candidate => {
+    if (candidate.location) {
+      // Find matching coordinates (case-insensitive)
+      const matched = Object.keys(coordinatesDB).find(key => 
+        key.toLowerCase() === candidate.location.toLowerCase()
+      );
+      
+      if (matched) {
+        const coords = coordinatesDB[matched];
+        candidate.coordinates = coords;
+        candidate.distance = haversineDistance(targetLat, targetLon, coords[0], coords[1]);
+        matchedCandidates++;
+        
+        if (candidate.distance <= maxDistance) {
+          candidatesWithDistance.push(candidate);
+          withinRadius++;
+        }
+      }
+    }
+  });
+  
+  // Sort by distance
+  candidatesWithDistance.sort((a, b) => a.distance - b.distance);
+  
+  // Store filtered results
+  filteredResults = candidatesWithDistance;
+  
+  // Display results
+  let resultText = `Processing complete!\n`;
+  resultText += `Total candidates: ${processedCSVData.candidates.length}\n`;
+  resultText += `Candidates with matched locations: ${matchedCandidates}\n`;
+  resultText += `Candidates within ${maxDistance} miles: ${withinRadius}\n`;
+  
+  if (withinRadius > 0) {
+    resultText += `\nClosest candidates:\n`;
+    const displayCount = Math.min(5, withinRadius);
+    for (let i = 0; i < displayCount; i++) {
+      const candidate = candidatesWithDistance[i];
+      resultText += `- ${candidate.location}: ${candidate.distance.toFixed(1)} miles\n`;
+    }
+    
+    if (withinRadius > 5) {
+      resultText += `... and ${withinRadius - 5} more\n`;
+    }
+  }
+  
+  resultBox.value = resultText;
+}
+
+function handleSaveButton() {
+  if (!filteredResults || filteredResults.length === 0) {
+    resultBox.value = 'Error: No filtered results to save. Please run the analysis first.';
+    return;
+  }
+  
+  // Create CSV content
+  const headers = [...processedCSVData.headers, 'Distance (miles)'];
+  let csvContent = headers.map(h => `"${h}"`).join(',') + '\n';
+  
+  filteredResults.forEach(candidate => {
+    const row = [...candidate.originalRow, candidate.distance.toFixed(2)];
+    csvContent += row.map(cell => `"${cell}"`).join(',') + '\n';
+  });
+  
+  // Create and download file
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'filtered_candidates.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+  
+  resultBox.value = `File saved successfully!\nDownloaded: filtered_candidates.csv\nContains ${filteredResults.length} candidates`;
+}
+
+// Haversine distance calculation (returns distance in miles)
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 3959; // Earth's radius in miles
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * 
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function toRadians(degrees) {
+  return degrees * (Math.PI / 180);
 }
 
 // Simple CSV line parser (handles basic cases)
@@ -176,4 +348,13 @@ function parseCSVLine(line) {
   
   result.push(current);
   return result;
+}
+
+// Help function placeholders (you can implement these later)
+function showHelp(type) {
+  if (type === 'file') {
+    alert('Upload a CSV file with candidate data. The file should have either "city" and "state" columns, or a single "address" column.');
+  } else if (type === 'coordinates') {
+    alert('Enter the target location coordinates in decimal format, separated by a comma. Example: 40.7128, -74.0060 (for New York City)');
+  }
 }
