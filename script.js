@@ -97,12 +97,12 @@ function normalizeCityName(cityName) {
   
   let normalized = cityName.trim();
   
-  // Expand common abbreviations to full words for better matching
+  // Common city name normalizations - expand abbreviations to match full database
   const replacements = [
-    [/\bSt\.?\b/gi, 'Saint'],
-    [/\bFt\.?\b/gi, 'Fort'],
-    [/\bMt\.?\b/gi, 'Mount'],
-    [/\bJct\.?\b/gi, 'Junction'],
+    [/\bSt\b/gi, 'Saint'],
+    [/\bFt\b/gi, 'Fort'],
+    [/\bMt\b/gi, 'Mount'],
+    [/\bJct\b/gi, 'Junction'],
     [/\bCentre\b/gi, 'Center'],
     [/\bBoro\b/gi, 'Borough']
   ];
@@ -153,37 +153,42 @@ function processCSV(csvContent) {
     
     // Parse all data rows
     const candidates = [];
-    const uniqueLocations = new Set();
+    const uniqueLocations = new Map(); // Use Map to store both original and normalized
     
     for (let i = 1; i < nonEmptyLines.length; i++) {
       const row = parseCSVLine(nonEmptyLines[i]);
       
-      let location = '';
+      let originalLocation = '';
+      let normalizedLocation = '';
       
       // Prefer city/state over address
       if (cityIndex !== -1 && stateIndex !== -1) {
         const city = row[cityIndex] ? row[cityIndex].trim() : '';
         const state = row[stateIndex] ? row[stateIndex].trim() : '';
         if (city && state) {
+          originalLocation = `${city}, ${state}`;
+          const normalizedCity = normalizeCityName(city);
           const normalizedState = normalizeState(state);
-          location = `${city}, ${normalizedState}`;
+          normalizedLocation = `${normalizedCity}, ${normalizedState}`;
         }
       } else if (addressIndex !== -1) {
-        location = row[addressIndex] ? row[addressIndex].trim() : '';
+        originalLocation = row[addressIndex] ? row[addressIndex].trim() : '';
+        normalizedLocation = originalLocation; // No normalization for full addresses
       }
       
       // Store candidate data
       const candidate = {
         originalRow: row,
-        location: location,
+        originalLocation: originalLocation,
+        normalizedLocation: normalizedLocation,
         coordinates: null,
         distance: null
       };
       
       candidates.push(candidate);
       
-      if (location) {
-        uniqueLocations.add(location);
+      if (originalLocation) {
+        uniqueLocations.set(originalLocation, normalizedLocation);
       }
     }
     
@@ -191,31 +196,16 @@ function processCSV(csvContent) {
     const matchedLocations = [];
     const unmatchedLocations = [];
     
-    uniqueLocations.forEach(location => {
-      // Try exact match first (case-insensitive)
-      let matched = Object.keys(coordinatesDB).find(key => 
-        key.toLowerCase() === location.toLowerCase()
+    uniqueLocations.forEach((normalizedLocation, originalLocation) => {
+      // Case-insensitive matching using normalized location
+      const matched = Object.keys(coordinatesDB).find(key => 
+        key.toLowerCase() === normalizedLocation.toLowerCase()
       );
       
-      // If no exact match, try with normalized city name
-      if (!matched) {
-        const parts = location.split(',');
-        if (parts.length === 2) {
-          const city = parts[0].trim();
-          const state = parts[1].trim();
-          const normalizedCity = normalizeCityName(city);
-          const normalizedLocation = `${normalizedCity}, ${state}`;
-          
-          matched = Object.keys(coordinatesDB).find(key => 
-            key.toLowerCase() === normalizedLocation.toLowerCase()
-          );
-        }
-      }
-      
       if (matched) {
-        matchedLocations.push(location);
+        matchedLocations.push(originalLocation);
       } else {
-        unmatchedLocations.push(location);
+        unmatchedLocations.push(originalLocation);
       }
     });
     
@@ -306,26 +296,11 @@ function handleRunButton() {
   let withinRadius = 0;
   
   processedCSVData.candidates.forEach(candidate => {
-    if (candidate.location) {
-      // Try exact match first (case-insensitive)
-      let matched = Object.keys(coordinatesDB).find(key => 
-        key.toLowerCase() === candidate.location.toLowerCase()
+    if (candidate.normalizedLocation) {
+      // Find matching coordinates using normalized location (case-insensitive)
+      const matched = Object.keys(coordinatesDB).find(key => 
+        key.toLowerCase() === candidate.normalizedLocation.toLowerCase()
       );
-      
-      // If no exact match, try with normalized city name
-      if (!matched) {
-        const parts = candidate.location.split(',');
-        if (parts.length === 2) {
-          const city = parts[0].trim();
-          const state = parts[1].trim();
-          const normalizedCity = normalizeCityName(city);
-          const normalizedLocation = `${normalizedCity}, ${state}`;
-          
-          matched = Object.keys(coordinatesDB).find(key => 
-            key.toLowerCase() === normalizedLocation.toLowerCase()
-          );
-        }
-      }
       
       if (matched) {
         const coords = coordinatesDB[matched];
@@ -358,7 +333,7 @@ function handleRunButton() {
     const displayCount = Math.min(10, withinRadius);
     for (let i = 0; i < displayCount; i++) {
       const candidate = candidatesWithDistance[i];
-      resultText += `- ${candidate.location}: ${candidate.distance.toFixed(1)} miles\n`;
+      resultText += `- ${candidate.originalLocation}: ${candidate.distance.toFixed(1)} miles\n`;
     }
     
     if (withinRadius > 10) {
