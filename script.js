@@ -45,6 +45,46 @@ fileInput.addEventListener('change', handleFileSelect);
 runButton.addEventListener('click', handleRunButton);
 saveButton.addEventListener('click', handleSaveButton);
 
+// Add coordinate field auto-rounding functionality
+coordinatesField.addEventListener('paste', handleCoordinatePaste);
+coordinatesField.addEventListener('input', handleCoordinateInput);
+
+function handleCoordinatePaste(event) {
+  // Let the paste happen first, then process
+  setTimeout(() => {
+    roundCoordinates();
+  }, 0);
+}
+
+function handleCoordinateInput(event) {
+  // Only round if it looks like coordinates were pasted (contains many decimal places)
+  const value = event.target.value;
+  if (value.includes(',') && value.match(/\d+\.\d{5,}/)) {
+    roundCoordinates();
+  }
+}
+
+function roundCoordinates() {
+  const value = coordinatesField.value.trim();
+  
+  // Check if it looks like coordinates (lat, lon format)
+  const coordsMatch = value.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+  
+  if (coordsMatch) {
+    const lat = parseFloat(coordsMatch[1]);
+    const lon = parseFloat(coordsMatch[2]);
+    
+    if (!isNaN(lat) && !isNaN(lon)) {
+      // Round to 4 decimal places
+      const roundedLat = Math.round(lat * 10000) / 10000;
+      const roundedLon = Math.round(lon * 10000) / 10000;
+      
+      // Update the field with rounded values
+      coordinatesField.value = `${roundedLat}, ${roundedLon}`;
+    }
+  }
+}
+
 function handleFileSelect(event) {
   const file = event.target.files[0];
   
