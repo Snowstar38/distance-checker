@@ -2,6 +2,7 @@
 const fileInput = document.getElementById('fileInput');
 const fileName = document.getElementById('fileName');
 const resultBox = document.getElementById('resultBox');
+const unmatchedBox = document.getElementById('unmatchedBox');
 const distanceField = document.getElementById('distanceField');
 const coordinatesField = document.getElementById('coordinatesField');
 const runButton = document.getElementById('runButton');
@@ -11,6 +12,21 @@ const saveButton = document.getElementById('saveButton');
 let coordinatesDB = null;
 let processedCSVData = null;
 let filteredResults = null;
+
+// State name to abbreviation mapping
+const stateMapping = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+  'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+  'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+  'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+  'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+  'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+  'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+  'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
+  'district of columbia': 'DC'
+};
 
 // Load coordinates database on page load
 window.addEventListener('DOMContentLoaded', async () => {
@@ -36,6 +52,7 @@ function handleFileSelect(event) {
   if (!file) {
     fileName.textContent = 'No file selected';
     resultBox.value = '';
+    unmatchedBox.value = '';
     processedCSVData = null;
     return;
   }
@@ -44,6 +61,7 @@ function handleFileSelect(event) {
   if (!file.name.toLowerCase().endsWith('.csv')) {
     fileName.textContent = 'Please select a CSV file';
     resultBox.value = 'Error: Please select a .csv file';
+    unmatchedBox.value = '';
     processedCSVData = null;
     return;
   }
@@ -60,10 +78,44 @@ function handleFileSelect(event) {
   
   reader.onerror = function() {
     resultBox.value = 'Error: Could not read the file';
+    unmatchedBox.value = '';
     processedCSVData = null;
   };
   
   reader.readAsText(file);
+}
+
+function normalizeState(stateName) {
+  if (!stateName) return '';
+  
+  const normalized = stateName.toLowerCase().trim();
+  return stateMapping[normalized] || stateName.trim();
+}
+
+function normalizeCityName(cityName) {
+  if (!cityName) return '';
+  
+  let normalized = cityName.trim();
+  
+  // Common city name normalizations
+  const replacements = [
+    [/\bSaint\b/gi, 'St'],
+    [/\bFort\b/gi, 'Ft'],
+    [/\bMount\b/gi, 'Mt'],
+    [/\bNorth\b/gi, 'N'],
+    [/\bSouth\b/gi, 'S'],
+    [/\bEast\b/gi, 'E'],
+    [/\bWest\b/gi, 'W'],
+    [/\bJunction\b/gi, 'Jct'],
+    [/\bCentre\b/gi, 'Center'],
+    [/\bBorough\b/gi, 'Boro']
+  ];
+  
+  replacements.forEach(([pattern, replacement]) => {
+    normalized = normalized.replace(pattern, replacement);
+  });
+  
+  return normalized;
 }
 
 function processCSV(csvContent) {
@@ -71,6 +123,7 @@ function processCSV(csvContent) {
     // Check if coordinates database is loaded
     if (!coordinatesDB) {
       resultBox.value = 'Error: Coordinates database not loaded yet. Please try again.';
+      unmatchedBox.value = '';
       return;
     }
     
@@ -82,6 +135,7 @@ function processCSV(csvContent) {
     
     if (nonEmptyLines.length === 0) {
       resultBox.value = 'Error: CSV file is empty';
+      unmatchedBox.value = '';
       return;
     }
     
@@ -97,6 +151,7 @@ function processCSV(csvContent) {
     // Check if we have the required columns
     if (cityIndex === -1 && stateIndex === -1 && addressIndex === -1) {
       resultBox.value = 'Error: CSV must have either "city"/"state" columns or an "address" column';
+      unmatchedBox.value = '';
       return;
     }
     
@@ -114,7 +169,9 @@ function processCSV(csvContent) {
         const city = row[cityIndex] ? row[cityIndex].trim() : '';
         const state = row[stateIndex] ? row[stateIndex].trim() : '';
         if (city && state) {
-          location = `${city}, ${state}`;
+          const normalizedCity = normalizeCityName(city);
+          const normalizedState = normalizeState(state);
+          location = `${normalizedCity}, ${normalizedState}`;
         }
       } else if (addressIndex !== -1) {
         location = row[addressIndex] ? row[addressIndex].trim() : '';
@@ -161,24 +218,29 @@ function processCSV(csvContent) {
       unmatchedLocations: unmatchedLocations
     };
     
-    // Display the results
+    // Display the results in main result box
     let resultText = `File loaded successfully!\n`;
     resultText += `Number of candidates: ${candidates.length}\n`;
     resultText += `Unique locations found: ${uniqueLocations.size}\n`;
     resultText += `Locations matched: ${matchedLocations.length}\n`;
     resultText += `Locations not matched: ${unmatchedLocations.length}\n`;
     
-    if (unmatchedLocations.length > 0) {
-      resultText += `\nUnmatched locations:\n`;
-      unmatchedLocations.forEach(loc => {
-        resultText += `- ${loc}\n`;
-      });
-    }
-    
     resultBox.value = resultText;
+    
+    // Display unmatched locations in separate box
+    if (unmatchedLocations.length > 0) {
+      let unmatchedText = `${unmatchedLocations.length} locations could not be matched:\n\n`;
+      unmatchedLocations.forEach(loc => {
+        unmatchedText += `${loc}\n`;
+      });
+      unmatchedBox.value = unmatchedText;
+    } else {
+      unmatchedBox.value = 'All locations matched successfully!';
+    }
     
   } catch (error) {
     resultBox.value = 'Error: Could not process the CSV file';
+    unmatchedBox.value = '';
     console.error('CSV processing error:', error);
     processedCSVData = null;
   }
@@ -268,14 +330,14 @@ function handleRunButton() {
   
   if (withinRadius > 0) {
     resultText += `\nClosest candidates:\n`;
-    const displayCount = Math.min(5, withinRadius);
+    const displayCount = Math.min(10, withinRadius);
     for (let i = 0; i < displayCount; i++) {
       const candidate = candidatesWithDistance[i];
       resultText += `- ${candidate.location}: ${candidate.distance.toFixed(1)} miles\n`;
     }
     
-    if (withinRadius > 5) {
-      resultText += `... and ${withinRadius - 5} more\n`;
+    if (withinRadius > 10) {
+      resultText += `... and ${withinRadius - 10} more\n`;
     }
   }
   
