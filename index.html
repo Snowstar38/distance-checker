@@ -163,6 +163,52 @@
       margin-top: 15px;
     }
 
+    /* Processing popup styles */
+    .processing-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: none;
+      z-index: 2000;
+    }
+
+    .processing-popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      padding: 30px 40px;
+      text-align: center;
+      z-index: 2001;
+    }
+
+    .processing-popup h3 {
+      margin: 0 0 15px 0;
+      color: #333;
+      font-size: 18px;
+    }
+
+    .processing-spinner {
+      width: 30px;
+      height: 30px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #007bff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
     @media (max-width: 768px) {
       .results-section {
         flex-direction: column;
@@ -222,6 +268,14 @@
     </div>
   </div>
 
+  <!-- Processing popup overlay -->
+  <div class="processing-overlay" id="processingOverlay">
+    <div class="processing-popup">
+      <h3>Processing...</h3>
+      <div class="processing-spinner"></div>
+    </div>
+  </div>
+
   <script>
     // Get references to the HTML elements
     const fileInput = document.getElementById('fileInput');
@@ -235,6 +289,7 @@
     const helpOverlay = document.getElementById('helpOverlay');
     const helpTitle = document.getElementById('helpTitle');
     const helpContent = document.getElementById('helpContent');
+    const processingOverlay = document.getElementById('processingOverlay');
 
     // Global variables to store data
     let coordinatesDB = null;
@@ -255,6 +310,15 @@
       'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
       'district of columbia': 'DC'
     };
+
+    // Processing popup functions
+    function showProcessing() {
+      processingOverlay.style.display = 'block';
+    }
+
+    function hideProcessing() {
+      processingOverlay.style.display = 'none';
+    }
 
     // Load coordinates database on page load
     window.addEventListener('DOMContentLoaded', async () => {
@@ -349,7 +413,7 @@
       }
     }
 
-    function handleFileSelect(event) {
+    async function handleFileSelect(event) {
       const file = event.target.files[0];
       
       // Check if a file was selected
@@ -373,14 +437,22 @@
       // Update the file name display
       fileName.textContent = file.name;
       
+      // Show processing popup
+      showProcessing();
+      
       // Read the file
       const reader = new FileReader();
       reader.onload = function(e) {
         const csvContent = e.target.result;
-        processCSV(csvContent);
+        // Use setTimeout to allow the processing popup to show
+        setTimeout(() => {
+          processCSV(csvContent);
+          hideProcessing();
+        }, 10);
       };
       
       reader.onerror = function() {
+        hideProcessing();
         resultBox.value = 'Error: Could not read the file';
         unmatchedBox.value = '';
         processedCSVData = null;
@@ -550,7 +622,7 @@
       }
     }
 
-    function handleRunButton() {
+    async function handleRunButton() {
       console.log('Run button clicked!'); // Debug
       
       // Check if we have processed CSV data
@@ -594,58 +666,85 @@
         return;
       }
       
-      // Calculate distances for all candidates
-      const candidatesWithDistance = [];
-      let matchedCandidates = 0;
-      let withinRadius = 0;
+      // Show processing popup
+      showProcessing();
       
-      processedCSVData.candidates.forEach(candidate => {
-        if (candidate.normalizedLocation) {
-          // Find matching coordinates using normalized location (case-insensitive)
-          const matched = Object.keys(coordinatesDB).find(key => 
-            key.toLowerCase() === candidate.normalizedLocation.toLowerCase()
-          );
-          
-          if (matched) {
-            const coords = coordinatesDB[matched];
-            candidate.coordinates = coords;
-            candidate.distance = haversineDistance(targetLat, targetLon, coords[0], coords[1]);
-            matchedCandidates++;
+      // Use setTimeout to allow the processing popup to show
+      setTimeout(() => {
+        // Calculate distances for all candidates
+        const candidatesWithDistance = [];
+        let matchedCandidates = 0;
+        let withinRadius = 0;
+        
+        processedCSVData.candidates.forEach(candidate => {
+          if (candidate.normalizedLocation) {
+            // Find matching coordinates using normalized location (case-insensitive)
+            const matched = Object.keys(coordinatesDB).find(key => 
+              key.toLowerCase() === candidate.normalizedLocation.toLowerCase()
+            );
             
-            if (candidate.distance <= maxDistance) {
-              candidatesWithDistance.push(candidate);
-              withinRadius++;
+            if (matched) {
+              const coords = coordinatesDB[matched];
+              candidate.coordinates = coords;
+              candidate.distance = haversineDistance(targetLat, targetLon, coords[0], coords[1]);
+              matchedCandidates++;
+              
+              if (candidate.distance <= maxDistance) {
+                candidatesWithDistance.push(candidate);
+                withinRadius++;
+              }
             }
           }
-        }
-      });
-      
-      // Sort by distance
-      candidatesWithDistance.sort((a, b) => a.distance - b.distance);
-      
-      // Store filtered results
-      filteredResults = candidatesWithDistance;
-      
-      // Display results
-      let resultText = `Processing complete!\n`;
-      resultText += `Total candidates: ${processedCSVData.candidates.length}\n`;
-      resultText += `Candidates with matched locations: ${matchedCandidates}\n`;
-      resultText += `Candidates within ${maxDistance} miles: ${withinRadius}\n`;
-      
-      if (withinRadius > 0) {
-        resultText += `\nClosest candidates:\n`;
-        const displayCount = Math.min(10, withinRadius);
-        for (let i = 0; i < displayCount; i++) {
-          const candidate = candidatesWithDistance[i];
-          resultText += `- ${candidate.originalLocation}: ${candidate.distance.toFixed(1)} miles\n`;
+        });
+        
+        // Sort by distance
+        candidatesWithDistance.sort((a, b) => a.distance - b.distance);
+        
+        // Store filtered results
+        filteredResults = candidatesWithDistance;
+        
+        // Get unique locations for display (fix for issue #1)
+        const uniqueLocationResults = new Map();
+        candidatesWithDistance.forEach(candidate => {
+          const location = candidate.originalLocation;
+          if (!uniqueLocationResults.has(location)) {
+            uniqueLocationResults.set(location, candidate.distance);
+          } else {
+            // Keep the shorter distance if we find duplicates
+            const existingDistance = uniqueLocationResults.get(location);
+            if (candidate.distance < existingDistance) {
+              uniqueLocationResults.set(location, candidate.distance);
+            }
+          }
+        });
+        
+        // Convert to array and sort by distance
+        const uniqueLocationArray = Array.from(uniqueLocationResults.entries())
+          .map(([location, distance]) => ({ location, distance }))
+          .sort((a, b) => a.distance - b.distance);
+        
+        // Display results
+        let resultText = `Processing complete!\n`;
+        resultText += `Total candidates: ${processedCSVData.candidates.length}\n`;
+        resultText += `Candidates with matched locations: ${matchedCandidates}\n`;
+        resultText += `Candidates within ${maxDistance} miles: ${withinRadius}\n`;
+        
+        if (withinRadius > 0) {
+          resultText += `\nClosest unique locations:\n`;
+          const displayCount = Math.min(10, uniqueLocationArray.length);
+          for (let i = 0; i < displayCount; i++) {
+            const item = uniqueLocationArray[i];
+            resultText += `- ${item.location}: ${item.distance.toFixed(1)} miles\n`;
+          }
+          
+          if (uniqueLocationArray.length > 10) {
+            resultText += `... and ${uniqueLocationArray.length - 10} more unique locations\n`;
+          }
         }
         
-        if (withinRadius > 10) {
-          resultText += `... and ${withinRadius - 10} more\n`;
-        }
-      }
-      
-      resultBox.value = resultText;
+        resultBox.value = resultText;
+        hideProcessing();
+      }, 10);
     }
 
     function handleSaveButton() {
