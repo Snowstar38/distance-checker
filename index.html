@@ -145,6 +145,29 @@
       border-radius: 8px 8px 0 0;
       font-weight: bold;
       font-size: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .help-close-button {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0;
+      width: 25px;
+      height: 25px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 3px;
+      min-width: 25px;
+    }
+
+    .help-close-button:hover {
+      background-color: rgba(255, 255, 255, 0.2);
     }
 
     .help-popup-content {
@@ -168,6 +191,79 @@
       border: 1px solid #ddd;
       border-radius: 4px;
       margin-top: 15px;
+    }
+
+    /* Error popup styles */
+    .error-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: none;
+      z-index: 1500;
+    }
+
+    .error-popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      z-index: 1501;
+    }
+
+    .error-popup-header {
+      background-color: #dc3545;
+      color: white;
+      padding: 15px 20px;
+      border-radius: 8px 8px 0 0;
+      font-weight: bold;
+      font-size: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .error-close-button {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0;
+      width: 25px;
+      height: 25px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 3px;
+      min-width: 25px;
+    }
+
+    .error-close-button:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .error-popup-content {
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .error-popup-content p {
+      margin: 0 0 15px 0;
+    }
+
+    .error-popup-content strong {
+      font-weight: bold;
+      color: #dc3545;
     }
 
     /* Processing popup styles */
@@ -221,7 +317,7 @@
         flex-direction: column;
       }
       
-      .help-popup {
+      .help-popup, .error-popup {
         width: 95%;
         max-height: 90vh;
       }
@@ -234,7 +330,7 @@
   <!-- File Upload Row -->
   <div class="row">
     <div class="row-content">
-      <input type="file" id="fileInput" />
+      <input type="file" id="fileInput" accept=".csv" />
       <span id="fileName">No file selected</span>
     </div>
     <button class="help-button" onclick="showHelp('file')">?</button>
@@ -272,8 +368,22 @@
     <div class="help-popup" onclick="event.stopPropagation()">
       <div class="help-popup-header" id="helpTitle">
         Help
+        <button class="help-close-button" onclick="closeHelp()">×</button>
       </div>
       <div class="help-popup-content" id="helpContent">
+        <!-- Content will be filled by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Error popup overlay -->
+  <div class="error-overlay" id="errorOverlay" onclick="closeError()">
+    <div class="error-popup" onclick="event.stopPropagation()">
+      <div class="error-popup-header" id="errorTitle">
+        File Format Error
+        <button class="error-close-button" onclick="closeError()">×</button>
+      </div>
+      <div class="error-popup-content" id="errorContent">
         <!-- Content will be filled by JavaScript -->
       </div>
     </div>
@@ -300,6 +410,9 @@
     const helpOverlay = document.getElementById('helpOverlay');
     const helpTitle = document.getElementById('helpTitle');
     const helpContent = document.getElementById('helpContent');
+    const errorOverlay = document.getElementById('errorOverlay');
+    const errorTitle = document.getElementById('errorTitle');
+    const errorContent = document.getElementById('errorContent');
     const processingOverlay = document.getElementById('processingOverlay');
 
     // Global variables to store data
@@ -331,6 +444,16 @@
       processingOverlay.style.display = 'none';
     }
 
+    // Error popup functions
+    function showError(content) {
+      errorContent.innerHTML = content;
+      errorOverlay.style.display = 'block';
+    }
+
+    function closeError() {
+      errorOverlay.style.display = 'none';
+    }
+
     // Load coordinates database on page load
     window.addEventListener('DOMContentLoaded', async () => {
       try {
@@ -359,7 +482,7 @@
         helpContent.innerHTML = `
           <p>Your CSV file must have a "header row" - the first row needs to have a label for each column (EX: "City", "State").</p>
           
-          <p>It MUST contain either <strong>a "city" and "state" column</strong> OR <strong>a "location" column in the "Cityname, ST"/"Cityname, Statename" format</strong>.</p>
+          <p>It MUST contain either <strong>a "city" and "state" column</strong> OR <strong>an "address" column in the "Cityname, ST"/"Cityname, Statename" format</strong>.</p>
           
           <p>You can have as many columns as you want in addition to the required ones.</p>
           
@@ -381,10 +504,11 @@
       helpOverlay.style.display = 'none';
     }
 
-    // Close help popup with Escape key
+    // Close popups with Escape key
     document.addEventListener('keydown', function(event) {
       if (event.key === 'Escape') {
         closeHelp();
+        closeError();
       }
     });
 
@@ -533,8 +657,23 @@
         
         // Check if we have the required columns
         if (cityIndex === -1 && stateIndex === -1 && addressIndex === -1) {
-          resultBox.value = 'Error: CSV must have either "city"/"state" columns or an "address" column';
-          unmatchedBox.value = '';
+          // Show detailed error popup instead of just text
+          showError(`
+            <p><strong>Your CSV file is missing the required column headers.</strong></p>
+            
+            <p>Your file needs to have <strong>one of these two options</strong>:</p>
+            
+            <p><strong>Option 1:</strong> Separate "city" and "state" columns<br>
+            Examples: City, State OR city, state OR CITY, STATE</p>
+            
+            <p><strong>Option 2:</strong> A single "address" column with locations in "City, ST" format<br>
+            Examples: Address, address, ADDRESS</p>
+            
+            <p><strong>What we found in your file:</strong><br>
+            ${headers.map(h => '"' + h + '"').join(', ')}</p>
+            
+            <p>Please update your CSV file headers and try again!</p>
+          `);
           return;
         }
         
