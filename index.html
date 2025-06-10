@@ -659,20 +659,19 @@
         if (cityIndex === -1 && stateIndex === -1 && addressIndex === -1) {
           // Show detailed error popup instead of just text
           showError(`
-            <p><strong>Your CSV file is missing the required column headers.</strong></p>
+            <p><strong>Your CSV file is missing the required column labels.</strong></p>
             
             <p>Your file needs to have <strong>one of these two options</strong>:</p>
             
-            <p><strong>Option 1:</strong> Separate "city" and "state" columns<br>
-            Examples: City, State OR city, state OR CITY, STATE</p>
+            <p><strong>Option 1:</strong> Separate "city" and "state" columns</p>
             
-            <p><strong>Option 2:</strong> A single "address" column with locations in "City, ST" format<br>
-            Examples: Address, address, ADDRESS</p>
+            <p><strong>Option 2:</strong> A single "address" column with locations in "City, ST" format</p>
             
-            <p><strong>What we found in your file:</strong><br>
-            ${headers.map(h => '"' + h + '"').join(', ')}</p>
+            <p>You can have as many other columns as you want - the program just requires at least one of these options to work.</p>
             
-            <p>Please update your CSV file headers and try again!</p>
+            <p><strong>Important:</strong> The first row of your CSV file needs to contain the column labels (like "Name", "City", "State", etc.). Your data should start in row 2.</p>
+            
+            <p>Please update your CSV file and try again!</p>
           `);
           return;
         }
