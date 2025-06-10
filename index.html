@@ -657,9 +657,29 @@
         
         // Check if we have the required columns
         if (cityIndex === -1 && stateIndex === -1 && addressIndex === -1) {
+          // Determine what's missing for more specific error message
+          let missingMessage = '';
+          if (cityIndex === -1 && stateIndex === -1) {
+            missingMessage = 'Missing: "city" and "state" columns';
+          } else if (cityIndex === -1) {
+            missingMessage = 'Missing: "city" column';
+          } else if (stateIndex === -1) {
+            missingMessage = 'Missing: "state" column';
+          }
+          
+          if (addressIndex === -1) {
+            if (missingMessage) {
+              missingMessage += ' OR "address" column';
+            } else {
+              missingMessage = 'Missing: "address" column';
+            }
+          }
+          
           // Show detailed error popup instead of just text
           showError(`
-            <p><strong>Your CSV file is missing the required column labels.</strong></p>
+            <p><strong>Your CSV file is missing required column labels.</strong></p>
+            
+            <p><strong>${missingMessage}</strong></p>
             
             <p>Your file needs to have <strong>one of these two options</strong>:</p>
             
@@ -667,11 +687,11 @@
             
             <p><strong>Option 2:</strong> A single "address" column with locations in "City, ST" format</p>
             
-            <p>You can have as many other columns as you want - the program just requires at least one of these options to work.</p>
+            <p>You can have as many other columns as you want - the program just needs these specific ones to work.</p>
             
-            <p><strong>Important:</strong> The first row of your CSV file needs to contain the column labels (like "Name", "City", "State", etc.). Your data should start in row 2.</p>
+            <p><strong>Important:</strong> These column labels must be in the very first row of your CSV file. This first row tells the program what each column contains.</p>
             
-            <p>Please update your CSV file and try again!</p>
+            <p>Please add the missing column labels to the first row of your CSV file and try again!</p>
           `);
           return;
         }
